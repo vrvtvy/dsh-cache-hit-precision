@@ -53,29 +53,30 @@ DSH 内置的格式化器有一条好规则：不把部分命中向上舍入成 
 
 ## 安装
 
-本包没有发布到 npm，因此按目录安装，而不是按包名安装。
+**按包名安装（推荐）** —— 包已发布到 npm。桌面端打开「设置 → 插件」，点
+「添加插件」，直接填包名 `dsh-cache-hit-precision` 再点「安装」；命令行等价于：
 
-先把仓库克隆到本地：
+```sh
+dsh plugin --profile web add dsh-cache-hit-precision
+```
+
+刚发布的版本在 npmmirror 镜像上可能有几分钟延迟；安装对话框和 CLI 都会在
+官方源与镜像之间自动回退，CLI 也可以用 `--registry` 显式指定源。
+
+**按目录安装** —— 也可以从源码目录安装。先把仓库克隆到本地：
 
 ```sh
 git clone https://github.com/vrvtvy/dsh-cache-hit-precision.git
 ```
 
-**桌面端** —— 打开「设置 → 插件」，点「添加插件」，填入克隆目录的**绝对路径**，
-再点「安装」：
-
-```
-D:/wherever/dsh-cache-hit-precision
-```
-
-路径必须是绝对路径；正斜杠在各平台都可用（Windows 用 `D:/…`，其它平台用
-`/home/you/…`）。安装完成后重启 DSH。
-
-**命令行** —— 仅适用于桌面端不接管的 profile：
+桌面端「设置 → 插件 → 添加插件」填克隆目录的**绝对路径**；命令行：
 
 ```sh
 dsh plugin --profile web add /absolute/path/to/dsh-cache-hit-precision
 ```
+
+路径必须是绝对路径；正斜杠在各平台都可用（Windows 用 `D:/…`，其它平台用
+`/home/you/…`）。安装完成后重启 DSH。
 
 桌面端独占管理自己的 profile，因此命令行会拒绝 `--profile desktop`；那种情况
 请改用「设置 → 插件」。

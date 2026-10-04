@@ -61,30 +61,34 @@ minor theme and layout changes.
 
 ## Install
 
-This package is not published to npm, so it installs from its own directory
-rather than by name.
+**By package name (recommended)** — the package is published to npm. In the
+desktop app, open *Settings → Plugins*, click *Add plugin*, and enter the
+package name `dsh-cache-hit-precision`; the command line equivalent is:
 
-Clone the repository first:
+```sh
+dsh plugin --profile web add dsh-cache-hit-precision
+```
+
+A freshly published version may lag a few minutes on the npmmirror mirror; both
+the install dialog and the CLI fall back between the official registry and the
+mirror automatically, and the CLI accepts `--registry` to pick one explicitly.
+
+**From a directory** — you can also install from a source checkout. Clone the
+repository first:
 
 ```sh
 git clone https://github.com/vrvtvy/dsh-cache-hit-precision.git
 ```
 
-**Desktop app** — open *Settings → Plugins*, click *Add plugin*, enter the
-**absolute path** of the cloned directory, and click *Install*:
-
-```
-D:/wherever/dsh-cache-hit-precision
-```
-
-The path must be absolute; forward slashes work on every platform (`D:/…` on
-Windows, `/home/you/…` elsewhere). Restart DSH when the install finishes.
-
-**Command line** — only for a profile the desktop app does not own:
+In the desktop app, *Settings → Plugins → Add plugin* with the **absolute
+path** of the cloned directory; from the command line:
 
 ```sh
 dsh plugin --profile web add /absolute/path/to/dsh-cache-hit-precision
 ```
+
+The path must be absolute; forward slashes work on every platform (`D:/…` on
+Windows, `/home/you/…` elsewhere). Restart DSH when the install finishes.
 
 The desktop app manages its own profile exclusively, so it refuses
 `--profile desktop` from the CLI; use *Settings → Plugins* there instead.
