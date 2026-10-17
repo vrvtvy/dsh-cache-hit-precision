@@ -120,12 +120,14 @@ jobs:
           NPM_TAG: ${{ steps.gate.outputs.tag }}
         run: |
           set -euo pipefail
+          # npm 接受发布后会异步索引，实测可达数分钟；这里给足 24 次 × 15 秒。
+          # npm accepts the publish before it finishes indexing; allow 24 x 15s.
           SERVED=""
-          for attempt in 1 2 3 4 5; do
+          for attempt in $(seq 1 24); do
             SERVED="$(npm view "${PKG}@${VERSION}" version 2>/dev/null || true)"
             if [ "${SERVED}" = "${VERSION}" ]; then break; fi
-            echo "waiting for ${PKG}@${VERSION} (attempt ${attempt})"
-            sleep 6
+            echo "waiting for ${PKG}@${VERSION} (attempt ${attempt}/24)"
+            sleep 15
           done
           if [ "${SERVED}" != "${VERSION}" ]; then
             echo "::error::${PKG}@${VERSION} is not served by the registry"
