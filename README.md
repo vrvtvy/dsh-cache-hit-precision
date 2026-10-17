@@ -112,3 +112,5 @@ npm test
 基于 [Cheng-cheng9669](https://github.com/Cheng-cheng9669) 的
 [dsh-cache-precision](https://github.com/Cheng-cheng9669/dsh-cache-precision)
 延续维护，适配 DSH 0.2。以 [MIT](LICENSE) 许可证发布。
+
+[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

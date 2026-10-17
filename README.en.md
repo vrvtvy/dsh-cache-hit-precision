@@ -129,3 +129,5 @@ npm test
 Continued from [Cheng-cheng9669](https://github.com/Cheng-cheng9669)'s
 [dsh-cache-precision](https://github.com/Cheng-cheng9669/dsh-cache-precision),
 adapted to DSH 0.2. Released under the [MIT](LICENSE) license.
+
+[![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
