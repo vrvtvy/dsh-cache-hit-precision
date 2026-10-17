@@ -1,6 +1,6 @@
 {
   "name": "dsh-cache-hit-precision",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "In-place precise cache-hit readout for the DSH Web composer statistics row.",
   "type": "module",
   "main": "./index.js",

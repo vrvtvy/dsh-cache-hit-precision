@@ -9,6 +9,8 @@ package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-17
+
 ### Added
 
 - GitHub Release 发布后经 Trusted Publishing（OIDC）自动发到 npm，由
@@ -18,6 +20,8 @@ package adheres to [Semantic Versioning](https://semver.org/).
   [RELEASING.md](RELEASING.md).
 - 新增 `RELEASING.md`，记录一次性绑定与每次发版步骤 / Added `RELEASING.md` covering the
   one-time binding and the per-release steps.
+- README 增加 Awesome DSH Plugin 收录徽章与 `powered by dsh` 徽章 / README badges for
+  Awesome DSH Plugin and `powered by dsh`.
 
 ## [0.2.3] - 2026-10-17
 
@@ -68,7 +72,8 @@ package adheres to [Semantic Versioning](https://semver.org/).
 
 - 适配 / Adapted to DSH `0.2.0-rc.*`.
 
-[Unreleased]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/vrvtvy/dsh-cache-hit-precision/releases/tag/v0.2.1
