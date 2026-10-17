@@ -48,6 +48,10 @@ jobs:
 
       - name: Release semantics
         id: gate
+        env:
+          # gh 回查 Release 的预发布状态时需要令牌 / gh needs a token to read the release.
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           VERSION="$(node -p "require('./package.json').version")"
@@ -65,7 +69,7 @@ jobs:
           fi
 
           # 2) Release 的预发布状态必须与版本后缀一致；事件载荷在手动触发时为空，统一回查 GitHub。
-          RELEASE_PRERELEASE="$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)"
+          RELEASE_PRERELEASE="$(gh release view "${RELEASE_TAG}" --repo "${REPO}" --json isPrerelease --jq .isPrerelease)"
           V_PRERELEASE="$(node -e 'process.stdout.write(process.argv[1].split("+")[0].includes("-") ? "true" : "false")' "${VERSION}")"
           if [ "${RELEASE_PRERELEASE}" != "${V_PRERELEASE}" ]; then
             echo "::error::release prerelease=${RELEASE_PRERELEASE} but version ${VERSION} says ${V_PRERELEASE}"
