@@ -4,6 +4,7 @@
 
 [![CI](https://github.com/vrvtvy/dsh-cache-hit-precision/actions/workflows/ci.yml/badge.svg)](https://github.com/vrvtvy/dsh-cache-hit-precision/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 一个 [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/)（DSH）Web 插件：把底部
 composer 统计行里的缓存命中率**原位精化到三位小数**（`缓存命中 98%` →

@@ -4,6 +4,7 @@ English | [中文](README.md) | [Changelog](CHANGELOG.md)
 
 [![CI](https://github.com/vrvtvy/dsh-cache-hit-precision/actions/workflows/ci.yml/badge.svg)](https://github.com/vrvtvy/dsh-cache-hit-precision/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
 
 A [DeepSeek Harness](https://deepseek-harness.github.io/deepseek-harness/) (DSH)
 Web plugin: it renders the built-in cache-hit reading of the composer statistics
