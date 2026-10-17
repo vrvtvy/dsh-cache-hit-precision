@@ -9,6 +9,16 @@ package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- GitHub Release 发布后经 Trusted Publishing（OIDC）自动发到 npm，由
+  `.github/workflows/release.yml` 执行；四道语义门禁见 [RELEASING.md](RELEASING.md) /
+  Publishing to npm is triggered by a GitHub Release through Trusted Publishing (OIDC) in
+  `.github/workflows/release.yml`; the four semantic gates are documented in
+  [RELEASING.md](RELEASING.md).
+- 新增 `RELEASING.md`，记录一次性绑定与每次发版步骤 / Added `RELEASING.md` covering the
+  one-time binding and the per-release steps.
+
 ## [0.2.3] - 2026-10-17
 
 ### Added

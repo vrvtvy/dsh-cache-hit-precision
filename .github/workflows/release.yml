@@ -1,0 +1,130 @@
+name: Release
+
+# GitHub Release 发布后自动发包 / Publish to npm when a GitHub Release is published.
+on:
+  release:
+    types: [published]
+  # 手动兜底：Release 已建好要补发，或调试 workflow / manual retry for an existing tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish (e.g. v0.2.4)
+        required: true
+        type: string
+
+# Trusted Publishing（OIDC）只需要 id-token；不需要任何 npm token secret。
+# Trusted Publishing (OIDC) needs only id-token; no npm token secret is stored.
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 锁定被发布的那个 tag，绝不从分支头代跑。
+          # Pin the published tag; never let a branch head masquerade as the release.
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # OIDC 换取发布凭证需要 npm >= 11.6.1。
+      # Exchanging the OIDC token for a publish credential needs npm >= 11.6.1.
+      - name: Ensure npm supports OIDC publish
+        run: npm install --global npm@^11.6.1
+
+      - name: Test
+        run: npm test
+
+      - name: Release semantics
+        id: gate
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          PKG="$(node -p "require('./package.json').name")"
+
+          if [ -z "${RELEASE_TAG}" ]; then
+            echo "::error::no release tag resolved"
+            exit 1
+          fi
+
+          # 1) GitHub Release 标签必须等于 v${VERSION}。
+          if [ "${RELEASE_TAG}" != "v${VERSION}" ]; then
+            echo "::error::tag ${RELEASE_TAG} does not match package.json ${VERSION}"
+            exit 1
+          fi
+
+          # 2) Release 的预发布状态必须与版本后缀一致；事件载荷在手动触发时为空，统一回查 GitHub。
+          RELEASE_PRERELEASE="$(gh release view "${RELEASE_TAG}" --json isPrerelease --jq .isPrerelease)"
+          V_PRERELEASE="$(node -e 'process.stdout.write(process.argv[1].split("+")[0].includes("-") ? "true" : "false")' "${VERSION}")"
+          if [ "${RELEASE_PRERELEASE}" != "${V_PRERELEASE}" ]; then
+            echo "::error::release prerelease=${RELEASE_PRERELEASE} but version ${VERSION} says ${V_PRERELEASE}"
+            exit 1
+          fi
+
+          # 3) dist-tag 路由：预发布只去 next，稳定版才去 latest。
+          if [ "${V_PRERELEASE}" = "true" ]; then NPM_TAG="next"; else NPM_TAG="latest"; fi
+
+          # 4) 稳定版发布前拒绝把 latest 往回退。
+          if [ "${NPM_TAG}" = "latest" ]; then
+            CURRENT="$(npm view "${PKG}" dist-tags.latest 2>/dev/null || echo 0.0.0)"
+            echo "current latest: ${CURRENT}"
+            node -e '
+              const parse = v => v.split("+")[0].split("-")[0].split(".").map(Number)
+              const next = process.argv[1]
+              const cur = process.argv[2]
+              const a = parse(next)
+              const b = parse(cur)
+              for (let i = 0; i < 3; i += 1) {
+                if (a[i] > b[i]) process.exit(0)
+                if (a[i] < b[i]) {
+                  console.error("refusing to move latest backwards: " + next + " < " + cur)
+                  process.exit(1)
+                }
+              }
+              console.error("version " + next + " equals current latest " + cur)
+              process.exit(1)
+            ' "${VERSION}" "${CURRENT}"
+          fi
+
+          {
+            echo "tag=${NPM_TAG}"
+            echo "version=${VERSION}"
+            echo "package=${PKG}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Publish
+        run: npm publish --access public --tag "${{ steps.gate.outputs.tag }}"
+        env:
+          # public 仓库 + public 包，附带 provenance 证明来源构建。
+          NPM_CONFIG_PROVENANCE: true
+
+      - name: Confirm the registry serves the release
+        env:
+          PKG: ${{ steps.gate.outputs.package }}
+          VERSION: ${{ steps.gate.outputs.version }}
+          NPM_TAG: ${{ steps.gate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          SERVED=""
+          for attempt in 1 2 3 4 5; do
+            SERVED="$(npm view "${PKG}@${VERSION}" version 2>/dev/null || true)"
+            if [ "${SERVED}" = "${VERSION}" ]; then break; fi
+            echo "waiting for ${PKG}@${VERSION} (attempt ${attempt})"
+            sleep 6
+          done
+          if [ "${SERVED}" != "${VERSION}" ]; then
+            echo "::error::${PKG}@${VERSION} is not served by the registry"
+            exit 1
+          fi
+          echo "published ${PKG}@${VERSION} under dist-tag ${NPM_TAG}"
