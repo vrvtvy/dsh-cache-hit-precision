@@ -1,12 +1,13 @@
 /* dsh-cache-hit-precision client half — precise in-place cache-hit readout.
  *
- * DSH 0.2 renders the composer statistics row through StatsPills, which mounts
- * on `conversation.composer.dock` and marks its container with
- * `data-composer-stats`. That attribute is this plugin's anchor: it reads the
+ * DSH renders the composer statistics row through StatsPills, which mounts on
+ * `conversation.composer.dock`. Up to 0.2.0 that row was one component marked
+ * `data-composer-stats`; from 0.2.1 each pill is its own dock entry marked
+ * `data-composer-stat`. Either markup is this plugin's anchor: it reads the
  * same `tokenUsage` projection the built-in pill reads, then refines only the
- * cache-hit reading inside that row. Every other figure (turns, steps,
- * throughput, totals) and both built-in dialogs stay untouched, and the plugin
- * changes no geometry.
+ * cache-hit reading inside it. Every other figure (turns, steps, throughput,
+ * totals) and both built-in dialogs stay untouched, and the plugin changes no
+ * geometry.
  *
  * The built-in formatter deliberately refuses to round a partial hit up to
  * 100%: it prints an integer until that would collapse, then widens the
@@ -32,8 +33,15 @@ window.__ModuleLoader__.load({
     var DIGITS = 3
     /** Widest precision the escalation may reach before it settles. */
     var MAX_DIGITS = 9
-    /** The container attribute StatsPills stamps on the statistics row. */
-    var STATS_SELECTOR = '[data-composer-stats]'
+    /**
+     * The reading row inside the composer dock, in both shipped host markups.
+     * Up to 0.2.0 StatsPills stamped one `data-composer-stats` container around
+     * the whole row; from 0.2.1 each pill is its own dock entry and carries
+     * `data-composer-stat` instead. Only the `usage` entry ever holds the
+     * cache-hit reading — the `activity` entry carries turns, steps and speed —
+     * so naming that value keeps the walk off an unrelated pill.
+     */
+    var STATS_SELECTOR = '[data-composer-stats], [data-composer-stat="usage"]'
     /** A cache-hit reading in either shipped locale, with its number captured. */
     var CACHE_HIT_TEXT = /(缓存命中|Cache hit)(\s+)(\d+(?:\.\d+)?)%/
     /**
@@ -137,9 +145,9 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Refine the statistics row under `root`: its cache-hit text node and the
+     * Refine the reading row under `root`: its cache-hit text node and the
      * accessible label of the pill that owns it.
-     * @param root - the statistics row element.
+     * @param root - the reading row element (either host markup).
      * @param percent - the precise percentage text.
      * @returns how many values were rewritten.
      */
@@ -255,7 +263,7 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Refine every mounted statistics row.
+     * Refine every mounted reading row.
      * @param percent - the precise percentage text.
      * @returns how many values were rewritten.
      */

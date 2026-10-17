@@ -1,6 +1,6 @@
 # dsh-cache-hit-precision
 
-中文 | [English](README.en.md)
+中文 | [English](README.en.md) | [更新日志](CHANGELOG.md)
 
 [![CI](https://github.com/vrvtvy/dsh-cache-hit-precision/actions/workflows/ci.yml/badge.svg)](https://github.com/vrvtvy/dsh-cache-hit-precision/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -47,9 +47,11 @@ DSH 内置的格式化器有一条好规则：不把部分命中向上舍入成 
 提交之后、浏览器绘制之前完成，低精度首帧不会被看到；其余变更仍按 burst
 结束后的一次去抖重扫处理。
 
-插件锚定统计行的 `data-composer-stats` 容器、会话用量弹窗行列表的
-`data-session-stats-usage` 属性，以及内置的两种语言文案，因此能跨次要的
-主题与布局调整继续工作。
+插件锚定统计行里缓存命中读数所在的那一个 pill——DSH 0.2.0 之前是包住整行的
+`data-composer-stats` 容器，0.2.1 起是各 pill 独立的 `data-composer-stat`（只认
+`usage` 那一个，`activity` 只放轮次与速度）——以及会话用量弹窗行列表的
+`data-session-stats-usage` 属性、内置的两种语言文案，因此能跨两代统计行结构
+与次要的主题、布局调整继续工作。
 
 ## 安装
 
@@ -83,9 +85,10 @@ dsh plugin --profile web add /absolute/path/to/dsh-cache-hit-precision
 
 ## 兼容性
 
-面向 DSH `0.2.0-rc.*`（已在 `0.2.0-rc.2` 上验证）。该版本的统计行由
-`@deepseek-ai/dsh-client-ui-chat` 的 `StatsPills` 渲染。若上游重做了相关
-结构或文案，可能需要更新本插件。
+面向 DSH `0.2.0-rc.*` 与 `0.2.1-rc.*`（分别在 `0.2.0-rc.2` 与 `0.2.1-rc.2` 上验证）。
+统计行由 `@deepseek-ai/dsh-client-ui-chat` 的 `StatsPills` 渲染；0.2.1 起该行拆成每个
+pill 一个 dock entry，锚点从整行容器改为单个 pill，插件同时认两套锚点。若上游重做了
+相关结构或文案，可能需要更新本插件。
 
 每轮用量面板（`data-turn-usage-details`）被**有意**排除在外：它的缓存命中率是
 另一个口径——单轮而非整个会话——改写成 pill 的数字反而会误报。

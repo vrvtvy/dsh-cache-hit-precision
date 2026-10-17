@@ -12,8 +12,12 @@ import { cacheHitPercent, billedInputTokens } from '../index.js'
 
 const source = readFileSync(fileURLToPath(new URL('../client.js', import.meta.url)), 'utf8')
 
-/** Materialize the client half through a stub module-loader facade. */
-function loadClientHalf() {
+/**
+ * Materialize the client half through a stub module-loader facade.
+ * @param {object} [dom] - page globals to inject; omitted, the half loads
+ * without a document, as it does before the dock mounts.
+ */
+function loadClientHalf(dom = {}) {
   let registration
   const window = { __ModuleLoader__: { load: (value) => { registration = value } } }
   const react = {
@@ -23,7 +27,7 @@ function loadClientHalf() {
   }
   // eslint-disable-next-line no-new-func -- the file is a page script, not a module.
   new Function('window', 'document', 'NodeFilter', 'MutationObserver', source)(
-    window, undefined, undefined, undefined,
+    window, dom.document, dom.NodeFilter, dom.MutationObserver,
   )
   assert.equal(registration.id, 'dsh-cache-hit-precision')
   assert.deepEqual(registration.factory.toString().length > 0, true)
@@ -270,4 +274,103 @@ test('handleMutations refines anchor work synchronously and defers the rest', ()
   ], scan, schedule)
   assert.equal(scans, 2)
   assert.equal(scheduled, 3)
+})
+
+const STATS_SELECTOR = '[data-composer-stats], [data-composer-stat="usage"]'
+const USAGE_DIALOG_SELECTOR = '[data-session-stats-usage]'
+
+/**
+ * Build the markup the two host versions mount in the composer dock around the
+ * reading. Up to 0.2.0 `data-composer-stats` wrapped the whole statistics row;
+ * from 0.2.1 each pill is its own dock entry carrying `data-composer-stat`, and
+ * `usage` is the entry that holds the cache-hit reading. Either anchor is a
+ * pill button whose visible text and `aria-label` carry that reading, exactly
+ * as StatsPills renders them.
+ * @param attribute - one anchor value of the selector the half queries.
+ * @param text - the reading the built-in formatter produced.
+ * @returns the anchor row element, its text node, and its labelled control.
+ */
+function readingRow(attribute, text) {
+  const label = { nodeValue: text }
+  const control = {
+    attributes: { 'aria-label': text },
+    getAttribute(name) { return this.attributes[name] ?? null },
+    setAttribute(name, value) { this.attributes[name] = value },
+  }
+  const anchor = {
+    attribute,
+    querySelectorAll: (selector) => (selector === '[aria-label]' ? [control] : []),
+  }
+  return { anchor, label, control }
+}
+
+/**
+ * A page serving the composed rows — and, when open, the portaled usage dialog —
+ * to the half's queries, with a text walker over each row's reading node.
+ * @param rows - rows from `readingRow`.
+ * @param dialogRows - rows for the open usage dialog, or null when it is closed.
+ * @returns the stub page document plus the dialog it built.
+ */
+function readingPage(rows, dialogRows = null) {
+  const dialogs = dialogRows === null ? [] : [usageDialog(dialogRows)]
+  return {
+    document: {
+      querySelectorAll(selector) {
+        // Match the way a browser does: a row answers only its own attribute,
+        // so an `activity` pill stays out of a selector that names `usage`.
+        if (selector === STATS_SELECTOR) {
+          return rows
+            .filter(row => selector.includes(`[${row.anchor.attribute}]`))
+            .map(row => row.anchor)
+        }
+        if (selector === USAGE_DIALOG_SELECTOR) return dialogs
+        return []
+      },
+      createTreeWalker(root) {
+        const texts = rows.filter(row => row.anchor === root).map(row => row.label)
+        let index = -1
+        return { nextNode: () => (index += 1) < texts.length ? texts[index] : null }
+      },
+    },
+    dialog: dialogs[0],
+  }
+}
+
+test('the reading is anchored in both shipped host markups', () => {
+  // 0.2.1 split the statistics row into one dock entry per pill and stamped each
+  // entry with `data-composer-stat`; a half anchored only on the pre-0.2.1
+  // container silently refines nothing on 0.2.1 and later.
+  for (const attribute of ['data-composer-stats', 'data-composer-stat="usage"']) {
+    const row = readingRow(attribute, '15.7M tok · 缓存命中 98%')
+    const page = readingPage([row])
+    const clientHalf = loadClientHalf({ document: page.document, NodeFilter: { SHOW_TEXT: 4 } })
+    assert.equal(clientHalf.patchAll('98.460'), 2, attribute)
+    assert.equal(row.label.nodeValue, '15.7M tok · 缓存命中 98.460%', attribute)
+    assert.equal(row.control.getAttribute('aria-label'), '15.7M tok · 缓存命中 98.460%', attribute)
+  }
+})
+
+test('one pass refines the pill and the open usage dialog to the same reading', () => {
+  // Both live in the same page — the pill in the composer dock, the dialog
+  // portaled onto document.body — so a session reading must match in both.
+  const row = readingRow('data-composer-stat="usage"', '80.9M tok · 缓存命中 99%')
+  const page = readingPage([row], [['缓存命中', '99%'], ['缓存读取', '50,174,720 tok']])
+  const clientHalf = loadClientHalf({ document: page.document, NodeFilter: { SHOW_TEXT: 4 } })
+  assert.equal(clientHalf.patchAll('99.186'), 3)
+  assert.equal(row.label.nodeValue, '80.9M tok · 缓存命中 99.186%')
+  assert.equal(page.dialog.valueOf(0), '99.186%')
+  // The sibling bucket keeps its exact figure.
+  assert.equal(page.dialog.valueOf(1), '50,174,720 tok')
+})
+
+test('the activity pill is not a reading anchor', () => {
+  // The activity entry carries turns, steps and speed and never a cache-hit
+  // reading, so naming only the usage value keeps the walk off it — a bare
+  // `[data-composer-stat]` would walk this pill on every mutation burst.
+  const row = readingRow('data-composer-stat="activity"', '1 轮 100 步 · 224 tok/s')
+  const page = readingPage([row])
+  const clientHalf = loadClientHalf({ document: page.document, NodeFilter: { SHOW_TEXT: 4 } })
+  assert.equal(clientHalf.patchAll('98.460'), 0)
+  assert.equal(row.label.nodeValue, '1 轮 100 步 · 224 tok/s')
+  assert.equal(row.control.getAttribute('aria-label'), '1 轮 100 步 · 224 tok/s')
 })

@@ -1,6 +1,6 @@
 # dsh-cache-hit-precision
 
-English | [中文](README.md)
+English | [中文](README.md) | [Changelog](CHANGELOG.md)
 
 [![CI](https://github.com/vrvtvy/dsh-cache-hit-precision/actions/workflows/ci.yml/badge.svg)](https://github.com/vrvtvy/dsh-cache-hit-precision/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -54,10 +54,13 @@ anchor mounts or React rewrites a reading in place. The low-precision first
 frame is never seen; anything else settles through one debounced rescan per
 mutation burst.
 
-The plugin anchors on the `data-composer-stats` container of the statistics
-row, on the `data-session-stats-usage` attribute of the session usage dialog's
-row list, and on the two shipped locale strings, so it keeps working across
-minor theme and layout changes.
+The plugin anchors on whichever pill holds the cache-hit reading — the
+`data-composer-stats` container that wrapped the whole statistics row up to
+0.2.0, or the per-pill `data-composer-stat` entries that replaced it in 0.2.1
+(only `usage`; `activity` carries turns and speed) — and on the
+`data-session-stats-usage` attribute of the session usage dialog's row list and
+the two shipped locale strings, so it keeps working across both statistics-row
+markups and across minor theme and layout changes.
 
 ## Install
 
@@ -95,10 +98,12 @@ The desktop app manages its own profile exclusively, so it refuses
 
 ## Compatibility
 
-Built for DSH `0.2.0-rc.*` (verified on `0.2.0-rc.2`), whose composer
-statistics row is rendered by `@deepseek-ai/dsh-client-ui-chat`'s
-`StatsPills`. An upstream rework of that markup or copy may require a plugin
-update.
+Built for DSH `0.2.0-rc.*` and `0.2.1-rc.*` (verified on `0.2.0-rc.2` and
+`0.2.1-rc.2`). The composer statistics row is rendered by
+`@deepseek-ai/dsh-client-ui-chat`'s `StatsPills`; from 0.2.1 that row is one
+dock entry per pill, so the anchor moved from the row container to the single
+pill and the plugin reads both. An upstream rework of that markup or copy may
+require a plugin update.
 
 The per-turn usage panel (`data-turn-usage-details`) is deliberately left
 alone: its cache-hit reading is a different aggregate — one turn rather than
