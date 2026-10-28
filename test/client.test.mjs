@@ -87,6 +87,33 @@ test('refineReading rewrites both shipped locales and keeps their spacing', () =
   assert.equal(client.refineReading('缓存命中 98.460%', '98.460'), null)
 })
 
+test('refineReading rewrites the six locales 0.2.2 added, keeping each one\'s own padding', () => {
+  // 0.2.2 registered ja, es, fr, de, ru and pt beside zh and en. The shipped
+  // templates differ by more than the words: four put a colon after the label
+  // and French pads the number from the percent sign. Only the digits are this
+  // plugin's to change, so every other character must survive verbatim.
+  const shipped = [
+    ['stats.cacheHit ja', 'キャッシュヒット 98%', 'キャッシュヒット 98.460%'],
+    ['stats.cacheHit es', 'Aciertos de caché: 98%', 'Aciertos de caché: 98.460%'],
+    ['stats.cacheHit fr', 'Taux de réussite du cache : 98 %', 'Taux de réussite du cache : 98.460 %'],
+    ['stats.cacheHit de', 'Cache-Treffer: 98%', 'Cache-Treffer: 98.460%'],
+    ['stats.cacheHit ru', 'Попадание в кэш: 98%', 'Попадание в кэш: 98.460%'],
+    ['stats.cacheHit pt', 'Acertos no cache: 98%', 'Acertos no cache: 98.460%'],
+  ]
+  for (const [name, before, after] of shipped) {
+    assert.equal(client.refineReading(before, '98.460'), after, name)
+  }
+  // The composed pill reading carries the label after the separator glyph.
+  assert.equal(
+    client.refineReading('15.7M tok · Taux de réussite du cache : 98 %', '98.460'),
+    '15.7M tok · Taux de réussite du cache : 98.460 %',
+  )
+  // Already at the target precision: no rewrite in any of them.
+  for (const [, , after] of shipped) {
+    assert.equal(client.refineReading(after, '98.460'), null, after)
+  }
+})
+
 test('refineReading ignores values that carry no cache-hit reading', () => {
   assert.equal(client.refineReading('1 轮 100 步 · 224 tok/s', '98.460'), null)
   assert.equal(client.refineReading('15.7M tok', '98.460'), null)
@@ -150,6 +177,21 @@ test('patchUsageDialog handles the English labels too', () => {
   assert.equal(client.patchUsageDialog(dialog, '99.339'), 1)
   assert.equal(dialog.valueOf(0), '99.339%')
   assert.equal(dialog.valueOf(1), '1,024 tok')
+})
+
+test('patchUsageDialog recognizes the cache-hit term in every shipped locale', () => {
+  // 0.2.2 also localized 'message.turnUsage.cacheHit', the term of the dialog's
+  // own row. A dialog whose term is not recognized silently keeps the built-in
+  // integer while the pill beside it shows the refined reading.
+  const terms = [
+    '缓存命中', 'Cache hit', 'キャッシュヒット', 'Aciertos de caché',
+    'Taux de réussite du cache', 'Cache-Treffer', 'Попадание в кэш', 'Acertos no cache',
+  ]
+  for (const term of terms) {
+    const dialog = usageDialog([[term, '99%'], ['50,174,720 tok', 'x']])
+    assert.equal(client.patchUsageDialog(dialog, '99.339'), 1, term)
+    assert.equal(dialog.valueOf(0), '99.339%', term)
+  }
 })
 
 test('patchUsageDialog is a no-op once the row already carries the reading', () => {
@@ -373,4 +415,114 @@ test('the activity pill is not a reading anchor', () => {
   assert.equal(clientHalf.patchAll('98.460'), 0)
   assert.equal(row.label.nodeValue, '1 轮 100 步 · 224 tok/s')
   assert.equal(row.control.getAttribute('aria-label'), '1 轮 100 步 · 224 tok/s')
+})
+
+const TOOLTIP_SELECTOR = '[data-portal][role="tooltip"]'
+
+/**
+ * Build the bubble shell the built-in `Tooltip` portals onto `document.body`:
+ * a label span inside a `role="tooltip"` span, addressed by its own anchor.
+ * @param text - the full reading the bubble repeats.
+ * @returns the bubble's anchor element and its text node.
+ */
+function tooltipBubble(text) {
+  const label = { nodeValue: text }
+  return { label, anchor: { querySelectorAll: () => [] } }
+}
+
+/**
+ * A page serving the composed rows and the full-reading bubbles, with a text
+ * walker over each anchor's nodes.
+ * @param rows - rows from `readingRow`.
+ * @param bubbles - bubbles from `tooltipBubble`.
+ * @returns the stub page document.
+ */
+function tooltipPage(rows, bubbles) {
+  return {
+    document: {
+      querySelectorAll(selector) {
+        if (selector === STATS_SELECTOR) {
+          return rows
+            .filter(row => selector.includes(`[${row.anchor.attribute}]`))
+            .map(row => row.anchor)
+        }
+        if (selector === TOOLTIP_SELECTOR) return bubbles.map(bubble => bubble.anchor)
+        return []
+      },
+      createTreeWalker(root) {
+        const texts = [
+          ...rows.filter(row => row.anchor === root).map(row => row.label),
+          ...bubbles.filter(bubble => bubble.anchor === root).map(bubble => bubble.label),
+        ]
+        let index = -1
+        return { nextNode: () => (index += 1) < texts.length ? texts[index] : null }
+      },
+    },
+  }
+}
+
+test('the full-reading tooltip 0.2.2 portals is refined alongside the pill', () => {
+  // 0.2.2 wraps a clipped pill's label in a tooltip carrying the whole reading
+  // built from the same built-in numbers. It lives on document.body, outside
+  // the pill, so a sweep that knows only the row leaves it announcing the
+  // un-refined integer after the pill advanced.
+  const row = readingRow('data-composer-stat="usage"', '80.9M tok · 缓存命中 99%')
+  const bubble = tooltipBubble('80.9M tok · 缓存命中 99%')
+  const page = tooltipPage([row], [bubble])
+  const clientHalf = loadClientHalf({ document: page.document, NodeFilter: { SHOW_TEXT: 4 } })
+  assert.equal(clientHalf.patchAll('99.186'), 3)
+  assert.equal(row.label.nodeValue, '80.9M tok · 缓存命中 99.186%')
+  assert.equal(bubble.label.nodeValue, '80.9M tok · 缓存命中 99.186%')
+})
+
+test('a tooltip that describes another surface is never rewritten', () => {
+  // Only the reading itself is this plugin's to change: a bubble with no
+  // cache-hit reading in it must come out byte-identical, or the content gate
+  // would be rewriting unrelated host copy.
+  const row = readingRow('data-composer-stat="usage"', '80.9M tok · Cache hit 99%')
+  const unrelated = tooltipBubble('1 turns 1 steps · 20 tok/s')
+  const page = tooltipPage([row], [unrelated])
+  const clientHalf = loadClientHalf({ document: page.document, NodeFilter: { SHOW_TEXT: 4 } })
+  assert.equal(clientHalf.patchAll('99.186'), 2)
+  assert.equal(row.label.nodeValue, '80.9M tok · Cache hit 99.186%')
+  assert.equal(unrelated.label.nodeValue, '1 turns 1 steps · 20 tok/s')
+})
+
+test('a 0.2.1 page keeps refining: two locales, no tooltip bubble', () => {
+  // The host corridor this plugin must not regress: 0.2.1 registered only zh
+  // and en and raised no full-reading tooltip, so the widened label set and the
+  // added bubble sweep have to leave that page byte-compatible.
+  const row = readingRow('data-composer-stat="usage"', '15.7M tok · Cache hit 98%')
+  const page = readingPage([row], [['Cache hit', '98%'], ['Cache read', '9,004 tok']])
+  const clientHalf = loadClientHalf({ document: page.document, NodeFilter: { SHOW_TEXT: 4 } })
+  assert.equal(clientHalf.patchAll('98.460'), 3)
+  assert.equal(row.label.nodeValue, '15.7M tok · Cache hit 98.460%')
+  assert.equal(row.control.getAttribute('aria-label'), '15.7M tok · Cache hit 98.460%')
+  assert.equal(page.dialog.valueOf(0), '98.460%')
+  // The third value is the pill's accessible label; the surviving bucket keeps
+  // its exact figure, exactly as it did before the 0.2.2 work.
+  assert.equal(page.dialog.valueOf(1), '9,004 tok')
+})
+
+test('a mounted tooltip bubble counts as anchor work', () => {
+  // The bubble appears on hover, well after the burst that painted the row, so
+  // it has to trigger the synchronous pass instead of waiting for the settled
+  // one. A node that answers only the bubble's own anchor proves the composed
+  // anchor selector carries it.
+  const isBubble = (selector) => selector.includes('[data-portal][role="tooltip"]')
+  assert.equal(client.touchesAnchor({
+    type: 'childList',
+    addedNodes: [{ nodeType: 1, matches: isBubble, querySelector: () => null, closest: () => null }],
+  }), true)
+  // A write inside an already-mounted bubble is anchor work too.
+  assert.equal(client.touchesAnchor({
+    type: 'characterData',
+    target: { parentElement: { closest: (selector) => (isBubble(selector) ? {} : null) } },
+  }), true)
+  // And a bubble's own insertion under an anchor-less body target still counts.
+  assert.equal(client.touchesAnchor({
+    type: 'childList',
+    addedNodes: [{ nodeType: 3, nodeValue: '99%' }],
+    target: { closest: (selector) => (isBubble(selector) ? {} : null) },
+  }), true)
 })

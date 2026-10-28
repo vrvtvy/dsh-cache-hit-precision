@@ -51,8 +51,12 @@ DSH 内置的格式化器有一条好规则：不把部分命中向上舍入成 
 插件锚定统计行里缓存命中读数所在的那一个 pill——DSH 0.2.0 之前是包住整行的
 `data-composer-stats` 容器，0.2.1 起是各 pill 独立的 `data-composer-stat`（只认
 `usage` 那一个，`activity` 只放轮次与速度）——以及会话用量弹窗行列表的
-`data-session-stats-usage` 属性、内置的两种语言文案，因此能跨两代统计行结构
-与次要的主题、布局调整继续工作。
+`data-session-stats-usage` 属性，因此能跨两代统计行结构继续工作。
+
+0.2.2 起 pill 的标签被省略号截断时会再弹一个全文 tooltip（`document.body` 上的
+portal）。插件同样精化它，且只改其中的缓存命中读数本身；不含该读数的 tooltip
+原样保留。文案按宿主当前发布的所有语言匹配（zh、en、ja、es、fr、de、ru、pt），
+每种语言自己的冒号与数字和 `%` 之间的空格都按原样保留——插件只换数字。
 
 ## 安装
 
@@ -86,9 +90,12 @@ dsh plugin --profile web add /absolute/path/to/dsh-cache-hit-precision
 
 ## 兼容性
 
-面向 DSH `0.2.0-rc.*` 与 `0.2.1-rc.*`（分别在 `0.2.0-rc.2` 与 `0.2.1-rc.2` 上验证）。
-统计行由 `@deepseek-ai/dsh-client-ui-chat` 的 `StatsPills` 渲染；0.2.1 起该行拆成每个
-pill 一个 dock entry，锚点从整行容器改为单个 pill，插件同时认两套锚点。若上游重做了
+面向 DSH `0.2.0-rc.*`、`0.2.1-rc.*` 与 `0.2.2-*`。已在真实宿主上冷启动验证
+`0.2.2-alpha.2`（`zh` 与 `fr` 各一轮完整会话，pill、全文 tooltip 与用量弹窗三处
+读数一致）与 `0.2.1-rc.4`（`zh` 一轮，无 tooltip 的结构照常精化）。统计行由
+`@deepseek-ai/dsh-client-ui-chat` 的 `StatsPills` 渲染；0.2.1 起该行拆成每个 pill
+一个 dock entry，锚点从整行容器改为单个 pill，插件同时认两套锚点。0.2.2 起文案
+扩到八种语言、并在标签被截断时多一个全文 tooltip，两者插件都已覆盖。若上游重做了
 相关结构或文案，可能需要更新本插件。
 
 每轮用量面板（`data-turn-usage-details`）被**有意**排除在外：它的缓存命中率是

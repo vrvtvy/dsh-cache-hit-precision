@@ -59,9 +59,15 @@ The plugin anchors on whichever pill holds the cache-hit reading — the
 `data-composer-stats` container that wrapped the whole statistics row up to
 0.2.0, or the per-pill `data-composer-stat` entries that replaced it in 0.2.1
 (only `usage`; `activity` carries turns and speed) — and on the
-`data-session-stats-usage` attribute of the session usage dialog's row list and
-the two shipped locale strings, so it keeps working across both statistics-row
-markups and across minor theme and layout changes.
+`data-session-stats-usage` attribute of the session usage dialog's row list, so
+it keeps working across both statistics-row markups.
+
+From 0.2.2 a pill whose label an ellipsis cuts also raises a full-reading
+tooltip (a portal onto `document.body`). The plugin refines that too, and only
+the cache-hit reading inside it: a tooltip carrying no such reading comes out
+byte-identical. Labels are matched in every locale the host ships (zh, en, ja,
+es, fr, de, ru, pt), and each locale's own colon and padding between the number
+and the percent sign are preserved verbatim — only the digits change.
 
 ## Install
 
@@ -99,12 +105,15 @@ The desktop app manages its own profile exclusively, so it refuses
 
 ## Compatibility
 
-Built for DSH `0.2.0-rc.*` and `0.2.1-rc.*` (verified on `0.2.0-rc.2` and
-`0.2.1-rc.2`). The composer statistics row is rendered by
-`@deepseek-ai/dsh-client-ui-chat`'s `StatsPills`; from 0.2.1 that row is one
-dock entry per pill, so the anchor moved from the row container to the single
-pill and the plugin reads both. An upstream rework of that markup or copy may
-require a plugin update.
+Built for DSH `0.2.0-rc.*`, `0.2.1-rc.*` and `0.2.2-*`, cold-booted
+for real on `0.2.2-alpha.2` (a full turn each in `zh` and `fr`; pill, full-reading
+tooltip and usage dialog agreed) and on `0.2.1-rc.4` (one `zh` turn, still refining
+without a tooltip). The composer statistics row is
+rendered by `@deepseek-ai/dsh-client-ui-chat`'s `StatsPills`; from 0.2.1 that row
+is one dock entry per pill, so the anchor moved from the row container to the
+single pill and the plugin reads both. 0.2.2 widened the copy to eight locales
+and added the clipped-label tooltip; both are covered here. An upstream rework
+of that markup or copy may require a plugin update.
 
 The per-turn usage panel (`data-turn-usage-details`) is deliberately left
 alone: its cache-hit reading is a different aggregate — one turn rather than

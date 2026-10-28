@@ -15,6 +15,16 @@
  * three-decimal base rather than an integer one, so the shipped guarantee
  * survives at higher resolution instead of being traded away for it.
  *
+ * Labels are matched in every locale the host ships (zh, en, ja, es, fr, de,
+ * ru, pt): 0.2.2 added six of them, so a cache-hit reading is now localized far
+ * beyond the two strings 0.2.1 rendered. Each locale's own separator and padding
+ * around the number is preserved verbatim; only the digits change.
+ *
+ * From 0.2.2 a clipped pill also repeats its full reading in a portaled
+ * `role="tooltip"` bubble. That bubble replays the built-in integer, so it is
+ * refined by content as well — a tooltip that carries no cache-hit reading is
+ * never rewritten, and one that does cannot contradict the pill beside it.
+ *
  * Refinement latency is part of the contract: a freshly mounted anchor —
  * the portaled token-usage dialog above all — is refined inside the mutation
  * observer's own microtask, which runs after React's commit but before the
@@ -42,8 +52,24 @@ window.__ModuleLoader__.load({
      * so naming that value keeps the walk off an unrelated pill.
      */
     var STATS_SELECTOR = '[data-composer-stats], [data-composer-stat="usage"]'
-    /** A cache-hit reading in either shipped locale, with its number captured. */
-    var CACHE_HIT_TEXT = /(缓存命中|Cache hit)(\s+)(\d+(?:\.\d+)?)%/
+    /**
+     * A cache-hit reading in every locale the host ships, with the label, the
+     * separator before the number, and the padding before the percent sign all
+     * captured. 0.2.1 rendered two locales; 0.2.2 shipped six more (ja, es, fr,
+     * de, ru, pt) and French even spaces the number from the percent sign, so
+     * neither the label set nor the spacing can be assumed — only the digits
+     * are this plugin's to change.
+     */
+    var CACHE_HIT_TEXT = /(缓存命中|Cache hit|キャッシュヒット|Aciertos de caché|Taux de réussite du cache|Cache-Treffer|Попадание в кэш|Acertos no cache)(\s*:?\s*)(\d+(?:\.\d+)?)(\s*)%/
+    /**
+     * The full-reading bubble the built-in `Tooltip` portals onto
+     * `document.body` from 0.2.2, while an ellipsis cuts a pill's label. A
+     * refined pill whose bubble still repeated the pre-refinement integer would
+     * contradict itself, so the bubble is refined by content as well: the sweep
+     * in {@link patchAll} reaches it, while {@link refineReading} leaves a
+     * bubble describing another surface untouched.
+     */
+    var TOOLTIP_SELECTOR = '[data-portal][role="tooltip"]'
     /**
      * The session token-usage dialog's row list. That dialog shares the pill's
      * own session aggregate, so both must read the same number — but React
@@ -53,10 +79,10 @@ window.__ModuleLoader__.load({
      * deliberately left alone: its reading is a different aggregate.
      */
     var USAGE_DIALOG_SELECTOR = '[data-session-stats-usage]'
-    /** Both anchors as one selector list, for recognizing anchor work. */
-    var ANCHOR_SELECTOR = STATS_SELECTOR + ', ' + USAGE_DIALOG_SELECTOR
-    /** The cache-hit row's term, in either shipped locale — the label alone, no number. */
-    var CACHE_HIT_LABEL = /^(?:缓存命中|Cache hit)$/
+    /** Every anchor as one selector list, for recognizing anchor work. */
+    var ANCHOR_SELECTOR = STATS_SELECTOR + ', ' + USAGE_DIALOG_SELECTOR + ', ' + TOOLTIP_SELECTOR
+    /** The cache-hit row's term, in every shipped locale — the label alone, no number. */
+    var CACHE_HIT_LABEL = /^(?:缓存命中|Cache hit|キャッシュヒット|Aciertos de caché|Taux de réussite du cache|Cache-Treffer|Попадание в кэш|Acertos no cache)$/
     /** A row value that is nothing but a percentage: the only shape this plugin owns. */
     var PERCENT_VALUE = /^\d+(?:\.\d+)?%$/
 
@@ -140,14 +166,19 @@ window.__ModuleLoader__.load({
     function refineReading(text, percent) {
       if (typeof text !== 'string' || text === '' || text.indexOf('%') < 0) return null
       if (!CACHE_HIT_TEXT.test(text)) return null
-      var next = text.replace(CACHE_HIT_TEXT, '$1$2' + percent + '%')
+      var next = text.replace(CACHE_HIT_TEXT, function (_, label, lead, _value, trail) {
+        return label + lead + percent + trail + '%'
+      })
       return next === text ? null : next
     }
 
     /**
-     * Refine the reading row under `root`: its cache-hit text node and the
-     * accessible label of the pill that owns it.
-     * @param root - the reading row element (either host markup).
+     * Refine every value under `root` that carries a cache-hit reading: its
+     * text nodes and the accessible label of the control that owns one. The
+     * same sweep serves a reading row, the open usage dialog's `<dd>`s and a
+     * full-reading tooltip bubble — all three carry plain text built from the
+     * same numbers.
+     * @param root - an anchor element (either host markup, dialog, or bubble).
      * @param percent - the precise percentage text.
      * @returns how many values were rewritten.
      */
@@ -273,6 +304,14 @@ window.__ModuleLoader__.load({
       var rows = document.querySelectorAll(STATS_SELECTOR)
       for (var index = 0; index < rows.length; index += 1) {
         changed += patchRow(rows[index], percent)
+      }
+      // From 0.2.2 a clipped pill repeats its reading in a tooltip bubble
+      // portaled onto `document.body`, so the bubble is its own anchor and
+      // sits outside every row swept above. The content gate inside
+      // `patchRow` keeps the sweep off tooltips that describe other surfaces.
+      var bubbles = document.querySelectorAll(TOOLTIP_SELECTOR)
+      for (var bubble = 0; bubble < bubbles.length; bubble += 1) {
+        changed += patchRow(bubbles[bubble], percent)
       }
       var dialogs = document.querySelectorAll(USAGE_DIALOG_SELECTOR)
       for (var dialog = 0; dialog < dialogs.length; dialog += 1) {

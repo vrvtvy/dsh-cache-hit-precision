@@ -9,6 +9,48 @@ package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-28
+
+### Added
+
+- 识别 DSH 0.2.2 新增的六种文案：`ja`、`es`、`fr`、`de`、`ru`、`pt`。0.2.2 把
+  `ui-chat` 的 locale 从 zh/en 两种扩到八种，西语、法语、德语、俄语、葡萄牙语的
+  模板还在标签后带冒号、法语在数字与 `%` 之间另有空格；插件按各语言模板原样保留
+  这些分隔符，只替换数字 / The six locales 0.2.2 added are recognized. 0.2.2 widened
+  `ui-chat`'s locale registration from zh/en to eight; the es, fr, de, ru and pt
+  templates also carry a colon after the label and French pads the number from the
+  percent sign. The plugin keeps each template's own separators verbatim and
+  replaces only the digits.
+- 精化 0.2.2 新增的「标签被截断时的全文 tooltip」：该气泡由内置 `Tooltip` portal
+  到 `document.body`，不在 pill 之内，原先不会被扫到，悬停时仍播报内置整数，与旁边
+  已精化的 pill 自相矛盾 / The full-reading tooltip 0.2.2 raises while a label is
+  clipped is refined as well. The built-in `Tooltip` portals it onto
+  `document.body`, outside the pill, so the row sweep never reached it and hovering
+  still announced the built-in integer beside the refined pill.
+- 三条回归测试：六种新语言的 pill 读数、八种语言的弹窗行项、以及 portal 气泡的
+  精化与「不含该读数的 tooltip 原样保留」 / Three regression tests covering the six
+  added pill readings, the eight-locale dialog terms, and the portaled bubble
+  together with an unrelated tooltip staying byte-identical.
+
+### Compatibility
+
+- 已核验宿主差异区间 `dsh-v0.2.1-rc.4` → `dsh-v0.2.2-alpha.2`：`ui-slots` 与
+  `token-format` 零改动，`data-composer-stat`、`data-session-stats-usage`、
+  `conversation.composer.dock`、`ctx.slots.inject`/`register` 与
+  `window.__ModuleLoader__.load` 契约全部存活，无需改动宿主侧代码 / The audited
+  host corridor kept every anchor and contract this plugin uses, so the fix is
+  client-copy only.
+- 兼容 `0.2.0-rc.*`、`0.2.1-rc.*` 与 `0.2.2-*`。0.2.1 的两种语言与无 tooltip
+  的结构仍由同一套匹配覆盖 / Compatible with `0.2.0-rc.*`, `0.2.1-rc.*` and
+  `0.2.2-*`; 0.2.1's two locales and tooltip-free structure stay covered by the same
+  matching.
+- 在真实宿主上冷启动验证过：`0.2.2-alpha.2`（`zh` 与 `fr` 两种语言各一轮完整会话，
+  pill、portal 气泡与用量弹窗三处读数一致）与 `0.2.1-rc.4`（`zh` 一轮，无 tooltip
+  结构仍精化）。此前的 `0.2.0-rc.2`、`0.2.1-rc.2`、`0.2.2-alpha.2` 结论来自包与源码
+  比对 / Verified by cold-booting real hosts: `0.2.2-alpha.2` (one full turn each in
+  `zh` and `fr`; pill, portaled bubble and usage dialog agreed) and `0.2.1-rc.4`
+  (one `zh` turn, still refining without a tooltip).
+
 ## [0.2.4] - 2026-10-17
 
 ### Added
@@ -72,7 +114,8 @@ package adheres to [Semantic Versioning](https://semver.org/).
 
 - 适配 / Adapted to DSH `0.2.0-rc.*`.
 
-[Unreleased]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.1...v0.2.2
