@@ -105,10 +105,14 @@ The desktop app manages its own profile exclusively, so it refuses
 
 ## Compatibility
 
-Built for DSH `0.2.0-rc.*`, `0.2.1-rc.*` and `0.2.2-*`, cold-booted
+Built for DSH `0.2.0-rc.*`, `0.2.1-rc.*`, `0.2.2-*` and `0.2.3-*`, cold-booted
 for real on `0.2.2-alpha.2` (a full turn each in `zh` and `fr`; pill, full-reading
 tooltip and usage dialog agreed) and on `0.2.1-rc.4` (one `zh` turn, still refining
-without a tooltip). The composer statistics row is
+without a tooltip). `0.2.3-alpha.1` was audited at source level: the composer and
+dialog anchors, all eight locale strings, the `tokenUsage` projection and billing
+buckets, and the formatter's critical-width behaviour are unchanged, with core
+readings rechecked by in-process assertions; a cold-boot visual check on that
+version is still outstanding. The composer statistics row is
 rendered by `@deepseek-ai/dsh-client-ui-chat`'s `StatsPills`; from 0.2.1 that row
 is one dock entry per pill, so the anchor moved from the row container to the
 single pill and the plugin reads both. 0.2.2 widened the copy to eight locales

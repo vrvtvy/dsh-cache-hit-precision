@@ -9,6 +9,14 @@ package adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- 把 `engines.dsh` 从 `dsh.engines.dsh` 移到 package.json 顶层 `engines`，使该范围真正参与 DSH 的插件兼容性检查；此前 DSH 只读取顶层 `engines.dsh`，原位置不被识别，兼容性实际靠 `peerDependencies`（`^0.2.0-rc.1`）兜底 / Moved `engines.dsh` from `dsh.engines.dsh` to the top-level `engines` in package.json so the range actually takes part in DSH's plugin compatibility check. DSH only reads top-level `engines.dsh`; the old location was ignored and compatibility fell back to `peerDependencies` (`^0.2.0-rc.1`).
+
+### Compatibility
+
+- 核验 DSH `0.2.3-alpha.1`：源码审计确认 `data-composer-stat="usage"`、`data-session-stats-usage`、portaled tooltip、`stats.cacheHit`/`message.turnUsage.cacheHit` 八种语言文案、`useProjection('tokenUsage')`、三个计费桶以及内置格式化器「部分命中不舍入成 100%」的承诺均未变化；插件无需功能性改动。以进程内断言复核了宿主与浏览器两侧的核心读数，尚未在 0.2.3-alpha.1 宿主上做冷启动视觉确认 / Audited DSH `0.2.3-alpha.1`: source review confirms every anchor, locale string, projection, billing bucket and the formatter's no-false-100% promise is unchanged; no functional change needed. Core readings were rechecked with in-process assertions; a cold-boot visual check on 0.2.3-alpha.1 is still outstanding.
+
 ## [0.2.5] - 2026-10-28
 
 ### Added
