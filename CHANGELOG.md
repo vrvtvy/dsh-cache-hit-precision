@@ -7,7 +7,15 @@
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 package adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.2.6] - 2026-11-23
+
+### Fixed
+
+- 修复多会话读数互相覆盖：分栏/侧栏后每个会话面板各有自己的 dock entry 与 `tokenUsage` 投影，但精化过程曾全局扫描并改写页面上所有锚点，最后重渲染的会话会把自己的命中率写进其它面板的 pill、portal tooltip 与用量弹窗。现在每次扫描只处理本会话根（`data-conversation-session` / `data-sidebar-right-session`）内的锚点；portal 到 body 的弹窗和气泡通过 CSS `position-anchor` 与 `aria-describedby` 回溯到触发它们的 pill，因此也归属各自会话。每会话隐藏哨兵提供 DOM 定位，不改变布局 / Fixed cross-session overwrites: after splitting or docking, every pane mounts its own dock entry with its own `tokenUsage` projection, but refinement scanned the whole page and rewrote every anchor, so the last re-rendered session stamped its percentage into all other panes' pills, tooltips and dialogs. Each scan now touches only anchors under its own session root (`data-conversation-session` / `data-sidebar-right-session`); body-portaled dialogs and tooltips resolve back to their trigger pill through `position-anchor` or `aria-describedby`. A hidden per-entry sentinel supplies the DOM foothold without changing layout.
+
+- 修复与 React 的写回拉锯战：插件把读数精化为 98.460%，React 下次提交又写回 98%，同步 MutationObserver 回调随即再次精化，拖放/分栏触发的高频重渲染把这条链放大成渲染进程死循环。后续精化改为每帧最多一次并加写入冷却期，打断拉锯 / Fixed a write-back tug-of-war with React: the plugin refines 98% to 98.460%, React's next commit restores 98%, and the synchronous observer callback refines again. High-frequency re-renders from drag/split turn this into a renderer freeze. Later refinements are now capped at one per animation frame with a post-write cooldown.
+
+- 修复客户端 MutationObserver 的自激死循环：精化读数会改写受全 body 观察的 DOM，同步回调随即再次改写，渲染进程主线程困在微任务循环里，界面冻结、CPU 单核满载。改写现在在暂停观察的窗口内进行，自己产生的 mutation 被丢弃，结束后按同一选项恢复观察；新增三条回归测试覆盖暂停/恢复、异常恢复与挂载前直写 / Fixed a self-feedback loop in the client MutationObserver: refining a reading rewrote DOM under a whole-body observer, whose synchronous callback rewrote again and pinned the renderer's main thread in a microtask loop with a frozen UI and a saturated core. Rewrites now run in a paused-observation window; their own mutations are discarded and observation resumes with the same options. Three regression tests cover pause/resume, recovery after a throw, and the direct write before an observer exists.
 
 ### Changed
 
@@ -122,7 +130,8 @@ package adheres to [Semantic Versioning](https://semver.org/).
 
 - 适配 / Adapted to DSH `0.2.0-rc.*`.
 
-[Unreleased]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.5...HEAD
+[0.2.6]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.5...v0.2.6
+[Unreleased]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.6...HEAD
 [0.2.5]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/vrvtvy/dsh-cache-hit-precision/compare/v0.2.2...v0.2.3

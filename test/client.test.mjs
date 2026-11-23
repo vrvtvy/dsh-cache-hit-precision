@@ -526,3 +526,140 @@ test('a mounted tooltip bubble counts as anchor work', () => {
     target: { closest: (selector) => (isBubble(selector) ? {} : null) },
   }), true)
 })
+
+/**
+ * A reading row that knows which conversation pane owns it.
+ * @param {string} sessionId - the pane's session id.
+ * @param {string} text - the built-in reading.
+ * @returns a stub row with a session root behind `closest`.
+ */
+function sessionRow(sessionId, text) {
+  const row = readingRow('data-composer-stat="usage"', text)
+  row.anchor.closest = (selector) => selector.includes('data-conversation-session')
+    ? { getAttribute: (name) => (name === 'data-conversation-session' ? sessionId : null) }
+    : null
+  return row
+}
+
+test('sessionIdOf resolves both shipped session-root attributes', () => {
+  const conversation = { getAttribute: (name) => (name === 'data-conversation-session' ? 'session-a' : null) }
+  const rightbar = { getAttribute: (name) => (name === 'data-sidebar-right-session' ? 'session-b' : null) }
+  assert.equal(client.sessionIdOf({
+    closest: (selector) => (selector.includes('data-conversation-session') ? conversation : null),
+  }), 'session-a')
+  assert.equal(client.sessionIdOf({
+    closest: (selector) => (selector.includes('data-sidebar-right-session') ? rightbar : null),
+  }), 'session-b')
+  assert.equal(client.sessionIdOf(null), null)
+})
+
+test('sessionIdOf traces a portaled dialog and tooltip back through their trigger', () => {
+  const conversation = { getAttribute: (name) => (name === 'data-conversation-session' ? 'session-a' : null) }
+  const trigger = {
+    style: { anchorName: '--dsh-stat-abc' },
+    closest: (selector) => (selector.includes('data-conversation-session') ? conversation : null),
+  }
+  // The usage `<dl>` sits inside the portaled panel that carries the anchor.
+  const panel = { style: { positionAnchor: '--dsh-stat-abc' } }
+  const dialog = { parentElement: panel }
+  const bubble = { getAttribute: (name) => (name === 'id' ? 'tip-1' : null) }
+  const described = {
+    getAttribute: (name) => (name === 'aria-describedby' ? 'tip-1' : null),
+    closest: (selector) => (selector.includes('data-conversation-session') ? conversation : null),
+  }
+  const clientHalf = loadClientHalf({
+    document: { querySelectorAll: (selector) => (selector === '[style]' ? [trigger, dialog] : selector === '[aria-describedby]' ? [described] : []) },
+    NodeFilter: { SHOW_TEXT: 4 },
+  })
+  assert.equal(clientHalf.sessionIdOf(dialog), 'session-a')
+  assert.equal(clientHalf.sessionIdOf(bubble), 'session-a')
+})
+
+test('a scoped pass refines only its own session; another session keeps its reading', () => {
+  // Two side-by-side panes each mount a dock entry. Without scoping the last
+  // entry to re-render writes its percentage into both panes' pills.
+  const first = sessionRow('session-a', '22.3K tok · 缓存命中 95%')
+  const second = sessionRow('session-b', '3.4M tok · 缓存命中 98%')
+  const page = readingPage([first, second])
+  const clientHalf = loadClientHalf({ document: page.document, NodeFilter: { SHOW_TEXT: 4 } })
+
+  assert.equal(clientHalf.patchAll('95.873', 'session-a'), 2)
+  assert.equal(first.label.nodeValue, '22.3K tok · 缓存命中 95.873%')
+  assert.equal(second.label.nodeValue, '3.4M tok · 缓存命中 98%')
+
+  assert.equal(clientHalf.patchAll('99.186', 'session-b'), 2)
+  assert.equal(first.label.nodeValue, '22.3K tok · 缓存命中 95.873%')
+  assert.equal(second.label.nodeValue, '3.4M tok · 缓存命中 99.186%')
+})
+
+test('a scoped pass leaves another session\'s portaled dialog and tooltip untouched', () => {
+  const conversation = (id) => ({ getAttribute: (name) => (name === 'data-conversation-session' ? id : null) })
+  const other = conversation('session-b')
+  const dialog = usageDialog([['缓存命中', '99%']])
+  dialog.style = { positionAnchor: '--dsh-stat-other' }
+  const bubble = tooltipBubble('80.9M tok · 缓存命中 99%')
+  bubble.anchor.style = {}
+  bubble.anchor.getAttribute = (name) => (name === 'id' ? 'tip-other' : null)
+  const trigger = { style: { anchorName: '--dsh-stat-other' }, closest: () => other }
+  const described = { getAttribute: (name) => (name === 'aria-describedby' ? 'tip-other' : null), closest: () => other }
+  const page = tooltipPage([], [bubble])
+  const documentStub = {
+    querySelectorAll: (selector) => {
+      if (selector === USAGE_DIALOG_SELECTOR) return [dialog]
+      if (selector === '[style]') return [trigger, dialog]
+      if (selector === '[aria-describedby]') return [described]
+      return page.document.querySelectorAll(selector)
+    },
+    createTreeWalker: page.document.createTreeWalker,
+  }
+  const clientHalf = loadClientHalf({ document: documentStub, NodeFilter: { SHOW_TEXT: 4 } })
+  assert.equal(clientHalf.patchAll('98.460', 'session-a'), 0)
+  assert.equal(dialog.valueOf(0), '99%')
+  assert.equal(bubble.label.nodeValue, '80.9M tok · 缓存命中 99%')
+})
+
+test('withObserverPaused suspends observation across a DOM rewrite', () => {
+  // A refinement writes text nodes while the observer watches the same subtree;
+  // without a paused window those writes re-enter the callback and spin the
+  // renderer. The rewrite must see a disconnected observer and a resumed one
+  // with the same options afterwards.
+  const calls = []
+  const observer = {
+    disconnect: () => calls.push('disconnect'),
+    observe: (target, options) => calls.push({ target, options }),
+  }
+  const doc = { marker: 'body' }
+  const clientHalf = loadClientHalf({ document: { body: doc } })
+  const options = { childList: true, subtree: true, characterData: true }
+  let sawDisconnected = false
+  const result = clientHalf.withObserverPaused(observer, options, () => {
+    sawDisconnected = calls.length === 1 && calls[0] === 'disconnect'
+    return 'rewritten'
+  })
+  assert.equal(result, 'rewritten')
+  assert.equal(sawDisconnected, true)
+  assert.equal(calls.length, 2)
+  assert.equal(calls[1].target, doc)
+  assert.deepEqual(calls[1].options, options)
+})
+
+test('withObserverPaused resumes observation when the rewrite throws', () => {
+  const calls = []
+  const observer = {
+    disconnect: () => calls.push('disconnect'),
+    observe: () => calls.push('observe'),
+  }
+  const clientHalf = loadClientHalf({ document: {} })
+  assert.throws(
+    () => clientHalf.withObserverPaused(observer, {}, () => { throw new Error('rewrite failed') }),
+    /rewrite failed/,
+  )
+  assert.deepEqual(calls, ['disconnect', 'observe'])
+})
+
+test('withObserverPaused writes directly before an observer exists', () => {
+  // The mount-time scan runs before MutationObserver is constructed, so it has
+  // nothing to suspend and must still refine the readings.
+  const clientHalf = loadClientHalf()
+  assert.equal(clientHalf.withObserverPaused(null, {}, () => 42), 42)
+})

@@ -30,6 +30,11 @@
  * observer's own microtask, which runs after React's commit but before the
  * browser paints, so the built-in low-precision first frame is never seen.
  * Everything else settles through one debounced rescan per mutation burst.
+ *
+ * Each composer pane mounts its own dock entry with its own session projection,
+ * so refinement is scoped to the session root that owns the entry: a session
+ * never writes another pane's reading, and the portaled dialog and tooltip it
+ * opened resolve back to that same session through their trigger.
  */
 
 window.__ModuleLoader__.load({
@@ -79,6 +84,15 @@ window.__ModuleLoader__.load({
      * deliberately left alone: its reading is a different aggregate.
      */
     var USAGE_DIALOG_SELECTOR = '[data-session-stats-usage]'
+    /**
+     * The session root each conversation pane carries. A docked composer lives
+     * inside one of these roots, so a dock entry can scope its DOM writes to the
+     * session whose `useProjection` it received instead of rewriting every
+     * pane's reading on the page.
+     */
+    var SESSION_SELECTOR = '[data-conversation-session], [data-sidebar-right-session]'
+    /** The two attributes that carry the session id on a root. */
+    var SESSION_ATTRIBUTES = ['data-conversation-session', 'data-sidebar-right-session']
     /** Every anchor as one selector list, for recognizing anchor work. */
     var ANCHOR_SELECTOR = STATS_SELECTOR + ', ' + USAGE_DIALOG_SELECTOR + ', ' + TOOLTIP_SELECTOR
     /** The cache-hit row's term, in every shipped locale — the label alone, no number. */
@@ -294,15 +308,94 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * Refine every mounted reading row.
+     * The CSS anchor name a portaled surface points at, if any. Both the stat
+     * dialog and the primitives' portaled overlays name their trigger this way.
+     * @param node - a portaled element.
+     * @returns the anchor name, or null.
+     */
+    function portalAnchorName(node) {
+      if (!node || !node.style) return null
+      var style = node.style
+      if (style.positionAnchor) return style.positionAnchor
+      return typeof style.getPropertyValue === 'function'
+        ? style.getPropertyValue('position-anchor') || null
+        : null
+    }
+
+    /**
+     * Find the trigger element that publishes a CSS anchor name.
+     * @param name - the anchor name a portal points at.
+     * @returns the trigger, or null.
+     */
+    function anchorNamed(name) {
+      if (!name || typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return null
+      var styled = document.querySelectorAll('[style]')
+      for (var index = 0; index < styled.length; index += 1) {
+        var style = styled[index].style
+        if (!style) continue
+        var published = style.anchorName ||
+          (typeof style.getPropertyValue === 'function' ? style.getPropertyValue('anchor-name') : null)
+        if (published === name) return styled[index]
+      }
+      return null
+    }
+
+    /**
+     * The session id that owns a node. A docked pill resolves through its
+     * ancestor pane; a portaled dialog resolves through the trigger named by
+     * its `position-anchor`, and a tooltip through the trigger that cites its
+     * id in `aria-describedby`. Portals have no session ancestor of their own.
+     * @param node - an anchor element.
+     * @returns the session id, or null when the node cannot be attributed.
+     */
+    function sessionIdOf(node) {
+      if (!node) return null
+      if (typeof node.closest === 'function') {
+        var root = node.closest(SESSION_SELECTOR)
+        if (root && typeof root.getAttribute === 'function') {
+          for (var attribute = 0; attribute < SESSION_ATTRIBUTES.length; attribute += 1) {
+            var id = root.getAttribute(SESSION_ATTRIBUTES[attribute])
+            if (id) return id
+          }
+        }
+      }
+      // A dialog anchor is often a child of the portaled panel: the CSS
+      // anchor name sits on the panel, so walk the short local chain too.
+      var cursor = node
+      for (var hop = 0; cursor && hop < 12; hop += 1) {
+        var trigger = anchorNamed(portalAnchorName(cursor))
+        if (trigger && trigger !== cursor) return sessionIdOf(trigger)
+        cursor = cursor.parentElement
+      }
+      if (typeof node.getAttribute === 'function') {
+        var bubbleId = node.getAttribute('id')
+        if (bubbleId && typeof document !== 'undefined' && typeof document.querySelectorAll === 'function') {
+          var described = document.querySelectorAll('[aria-describedby]')
+          for (var index = 0; index < described.length; index += 1) {
+            var value = described[index].getAttribute('aria-describedby') || ''
+            if (value.split(/\s+/).indexOf(bubbleId) >= 0) return sessionIdOf(described[index])
+          }
+        }
+      }
+      return null
+    }
+
+    /**
+     * Refine every mounted reading row belonging to one session.
      * @param percent - the precise percentage text.
+     * @param sessionId - the calling dock entry's session id; omitted refines every row.
      * @returns how many values were rewritten.
      */
-    function patchAll(percent) {
+    function patchAll(percent, sessionId) {
       if (typeof document === 'undefined') return 0
+      var scoped = sessionId !== undefined && sessionId !== null
       var changed = 0
+      function owns(node) {
+        return !scoped || sessionIdOf(node) === sessionId
+      }
       var rows = document.querySelectorAll(STATS_SELECTOR)
       for (var index = 0; index < rows.length; index += 1) {
+        if (!owns(rows[index])) continue
         changed += patchRow(rows[index], percent)
       }
       // From 0.2.2 a clipped pill repeats its reading in a tooltip bubble
@@ -311,13 +404,41 @@ window.__ModuleLoader__.load({
       // `patchRow` keeps the sweep off tooltips that describe other surfaces.
       var bubbles = document.querySelectorAll(TOOLTIP_SELECTOR)
       for (var bubble = 0; bubble < bubbles.length; bubble += 1) {
+        if (!owns(bubbles[bubble])) continue
         changed += patchRow(bubbles[bubble], percent)
       }
       var dialogs = document.querySelectorAll(USAGE_DIALOG_SELECTOR)
       for (var dialog = 0; dialog < dialogs.length; dialog += 1) {
+        if (!owns(dialogs[dialog])) continue
         changed += patchUsageDialog(dialogs[dialog], percent)
       }
       return changed
+    }
+
+    /** Minimum gap after a real refinement before another may run; breaks React write-back loops. */
+    var COOLDOWN_MS = 100
+    /** The mutation kinds that matter: new anchors, in-place rewrites, inserted text. */
+    var OBSERVER_OPTIONS = { childList: true, subtree: true, characterData: true }
+
+    /**
+     * Run `mutate` with observation suspended, then resume it. Refining a reading
+     * is itself a DOM mutation; feeding those writes back through the observer's
+     * synchronous callback keeps the renderer's main thread in a microtask loop
+     * that never yields. Records produced while disconnected are discarded, so
+     * resuming cannot replay them.
+     * @param observer - the live observer to suspend; null before it is created.
+     * @param options - the options to restore the observer with.
+     * @param mutate - the DOM rewrite to run in the paused window.
+     * @returns the value `mutate` returns.
+     */
+    function withObserverPaused(observer, options, mutate) {
+      if (!observer) return mutate()
+      observer.disconnect()
+      try {
+        return mutate()
+      } finally {
+        observer.observe(document.body, options)
+      }
     }
 
     /**
@@ -325,50 +446,80 @@ window.__ModuleLoader__.load({
      * hands it the session's `useProjection`, then reconciles the DOM whenever
      * the reading or a re-render changes it.
      * @param props - the dock entry's standard props.
-     * @returns null — this entry draws nothing.
+     * @returns a hidden span used only to locate the owning session root.
      */
     function CachePrecisionEntry(props) {
       var useProjection = props.useProjection
       var usage = useProjection ? useProjection('tokenUsage') : undefined
       var percent = precisePercent(usage)
+      // The dock entry draws nothing visible; this hidden seat is only a DOM
+      // foothold for finding the session root that owns the composer it sits in.
+      var scopeRef = React.useRef ? React.useRef(null) : null
 
       React.useLayoutEffect(function () {
         if (percent === null) return undefined
-        var timer = null
+        var disposed = false
+        var frame = null
+        var lastWrite = 0
+        var observer = null
 
+        // The built-in formatter and this readout disagree by design: it writes
+        // 98.460%, React's next commit restores 98%, and that mutation asks us
+        // to write again. Refining synchronously inside the observer callback
+        // turns the disagreement into a microtask loop that pins the renderer.
+        // Mount-time refinement is synchronous (no observer yet), but every
+        // later refinement is deferred to one animation frame and cooled down
+        // after a real write, so a React round-trip cannot sustain itself.
+        // Resolved at scan time rather than captured on mount: the hidden seat
+        // may attach a frame after this effect first runs.
+        function ownSession() {
+          return scopeRef && scopeRef.current ? sessionIdOf(scopeRef.current) : null
+        }
+        function runScan() {
+          if (disposed) return
+          if (typeof performance !== 'undefined' && performance.now() - lastWrite < COOLDOWN_MS) return
+          var sessionId = ownSession()
+          if (sessionId === null) return
+          var changed = withObserverPaused(observer, OBSERVER_OPTIONS, function () {
+            return patchAll(percent, sessionId)
+          })
+          if (changed > 0 && typeof performance !== 'undefined') lastWrite = performance.now()
+        }
         function scan() {
-          patchAll(percent)
+          if (disposed || frame !== null) return
+          if (typeof requestAnimationFrame !== 'function') { runScan(); return }
+          frame = requestAnimationFrame(function () {
+            frame = null
+            runScan()
+          })
         }
 
-        scan()
+        // Mount-time scan: the observer is not connected yet, so no feedback.
+        var mountSession = ownSession()
+        if (mountSession !== null) {
+          withObserverPaused(null, OBSERVER_OPTIONS, function () { patchAll(percent, mountSession) })
+        }
         if (typeof MutationObserver === 'undefined') return undefined
 
-        // One rescan per burst as the settle pass: anything the per-record
-        // pass missed is corrected once the burst ends. A write of ours is
-        // itself a DOM mutation, so the observer sees it and schedules one
-        // more scan; that scan finds every reading already at the target
-        // precision and writes nothing, so the loop settles instead of
-        // sustaining itself.
-        function scheduleSettledScan() {
-          if (timer !== null) return
-          timer = setTimeout(function () {
-            timer = null
-            scan()
-          }, 100)
-        }
-
-        var observer = new MutationObserver(function (records) {
-          handleMutations(records, scan, scheduleSettledScan)
+        observer = new MutationObserver(function (records) {
+          for (var index = 0; index < records.length; index += 1) {
+            if (touchesAnchor(records[index])) { scan(); break }
+          }
         })
-        observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+        observer.observe(document.body, OBSERVER_OPTIONS)
 
         return function () {
-          if (timer !== null) clearTimeout(timer)
-          observer.disconnect()
+          disposed = true
+          if (frame !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame)
+          if (observer) observer.disconnect()
         }
       }, [percent])
 
-      return null
+      return React.createElement('span', {
+        ref: scopeRef,
+        'data-dsh-cache-precision-scope': '',
+        style: { display: 'none' },
+      })
     }
 
     function apply(ctx) {
@@ -390,6 +541,8 @@ window.__ModuleLoader__.load({
     exports.touchesAnchor = touchesAnchor
     exports.handleMutations = handleMutations
     exports.patchAll = patchAll
+    exports.sessionIdOf = sessionIdOf
+    exports.withObserverPaused = withObserverPaused
     return module.exports
   },
 })
